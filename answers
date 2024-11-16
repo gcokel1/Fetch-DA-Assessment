@@ -1,0 +1,87 @@
+First Exercise: Explore the Data
+-
+"Are there any data quality issues present?" Yes, there are several across the 3 CSVs. 
+TRANSACTION.CSV: The file has some data issues with the Store Name column, as some of the store names appear to have been misread by the receipt scanner. Some examples of these are on lines 10156 and 44016 (/Mart), 
+10498 and 47265 (APERMERCADOSS MRS PORQUE TU ARUS ESCOCININ) which can be attributed to being in Spanish, 13004 and 44579 (App le Market) due to formatting misread, 15038 and 42720 (Hawes Mmarketh) due to what might be user error during snap,
+and my personal favorite on 1809 and 43111 (MAI KET WE DO BEEF THE BEST ALBER TSONS MARKET THE BEST WE DO BEEF) which could be from user error or an error during the snap read of the store name. 
+These all appear to be duplicate entires due to the matching User IDs, dates, and receipt IDs. In the TRANSACTION.CSV file, 
+there are also a fair amount of numbers submitted as text in the Barcode column and some submitted as a number format, causing inconsistencies in the data. 
+In the Quantity column, there are some quantities that are listed as a decimal- such as line 1422 at 2.83. I can only assume that this might be a weighted product that was used in the "correct my receipt" function by the user. 
+/
+PRODUCTS.CSV: as with the Barcode column of the TRANSACTIONS.CSV file, the Barcode column of this file inconsistently has some formatted as numbers and others formatted as text. Formatted as text appears to be the best option to get the full barcode pulled
+rather than having it be formatted as an exponent. There are some entries in this file that are blank for the MANUFACTURER and BRAND columns, which confuses me as to what might have caused this issue. Perhaps it is an error with the entry in 
+Mission Control when pulled into the CSV. There are 547 lines listed as "Needs Review" as Category_1 for the following Manufacturers: 
+Gallo, General Mills, Keurig Dr Pepper, Mars Wrigley, Molson Coors, Pepsico, Sargento, and The Coca-Cola Company. 
+These could cause a skew in any data analysis when folded into a table. There are some entries in the Manufacturer and Brand column that have apostrophe errors in the text: 
+such as lines 744428 and 756677 (BELLâ€™S BREWERY, INC.) and the brand Barbara's (spelt BARBARAâ€™S).  
+/
+USER.CSV: Some of the entries in the Birth_Date column go as far back to the year 1901 and 1903 and some being as recent as 2014. Both of these would not be valid data entries when pulling user metrics as they are not possible user ages for the app.
+For the Language column, there are a fair amount of blanks that would need to be filtered if we wanted to make use of that data properly. The Gender column also has some entries that are essentially the same but formatted slightly differently:
+Non_binary and Non-Binary, not_listed and My gender isn't listed, Prefer not to say and prefer_not_to_say, and unknown being similar to several of the previous options but not distinctively different. This is possibly caused by a "write in" option
+for selecting gender at sign-up and could be rectified by having a closed drop-down selection.
+
+Second Exercise: provide SQL queries
+//
+Q: What are the top 5 brands by receipts scanned among users 21 and over?
+A: From the provided query, the top 5 brands among users 21 and over from the provided tables are as follows in descending order: Dove, Nerds Candy, Hershey's, Coca-Cola, and Great Value.
+Query:
+SELECT p.brand, 
+COUNT (DISTINCT t.receipt_id) AS scanned_receipts
+FROM transactions t
+JOIN users u ON t.user_id = u.user_id
+JOIN products p ON t.barcode = p.barcode
+WHERE u.birth_date <= CURRENT_DATE - INTERVAL '21 years'
+AND p.brand IS NOT NULL
+AND t.receipt_id IS NOT NULL
+GROUP BY p.brand
+ORDER BY scanned_receipts DESC
+LIMIT 5;
+
+Q: What are the top 5 brands by sales among users that have had their account for at least six months?
+A: The top 5 brands among users whose accounts have been had for 6 months are: CVS, Trident, Dove, Coors Light, and Axe.
+Query: (Full disclosure, I kept having a collation error when trying to set the sales column data type as numeric and wasn't sure what was causing it so, needed to look up the CAST function and bitwise NOT operator as a workaround 
+and do some digging to get results that gave only valid numeric data) 
+SELECT p.brand, SUM(CAST(t.sale AS numeric)) AS total_sales
+FROM transactions t
+JOIN users u ON t.user_id = u.user_id
+JOIN products p ON t.barcode = p.barcode
+WHERE u.created_date <= CURRENT_DATE - INTERVAL '6 months'
+AND t.sale IS NOT NULL
+AND p.brand IS NOT NULL
+AND t.sale ~ '^\d+(\.\d+)?$'
+GROUP BY p.brand
+ORDER BY total_sales DESC
+LIMIT 5;
+
+Q: Which is the leading brand in the Dips & Salsa category?
+A: The leading brand in the Dips & Salsa category is Tostitos.
+Query:
+SELECT p.brand, SUM(CAST(t.sale AS numeric)) AS total_sales
+FROM transactions t
+JOIN products p ON t.barcode = p.barcode
+WHERE (p.category_1 = 'Dips & Salsa' OR p.category_2 = 'Dips & Salsa'
+OR p.category_3 = 'Dips & Salsa' OR p.category_4 = 'Dips & Salsa')
+AND t.sale ~ '^\d+(\.\d+)?$'
+GROUP BY p.brand
+ORDER BY total_sales DESC
+LIMIT 1;
+
+Third Exercise: Communicate with Stakeholders
+
+Hello, ___! I have those metrics you asked for and my findings are as follows (including accompanying queries if requested):
+
+The top 5 brands among users 21 and over from the provided tables are as follows in descending order: Dove, Nerds Candy, Hershey's, Coca-Cola, and Great Value.
+The top 5 brands among users whose accounts have been had for 6 months are: CVS, Trident, Dove, Coors Light, and Axe.
+And the leading brand in the Dips & Salsa category is Tostitos.
+
+Regarding the quality of the data sent for analysis, there are some issues with the overall quality. For the Products data, there are 547 lines listed as "Needs Review" as Category_1 for the following Manufacturers: 
+Gallo, General Mills, Keurig Dr Pepper, Mars Wrigley, Molson Coors, Pepsico, Sargento, and The Coca-Cola Company. 
+These could cause a skew in any data analysis when imported into a table. If we could get these particular items reviewed and corrected, we would have a much better idea of the data on hand!
+Also, in the same Products data file, can you help me understand why there are some missing Manufacturers and Brands entries where the barcodes and categories are present?
+In addition to this, the Transactions file had some formatting issues for the Sale column- can you make sure that these values are all numeric, please?
+
+Regarding an interesting trend for the top 5 brands for users who've had their account for at least 6 months, the results are all commonly found and bought brands at CVS. We may want to take a look at folding in more CVS-based offers
+or expanding our catalog of CVS brand items to bolster our users' purchasing habits!
+
+Thanks for your time,
+Gage Cokel
